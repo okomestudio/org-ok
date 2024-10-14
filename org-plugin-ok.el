@@ -30,5 +30,22 @@
 ;;
 ;;; Code:
 
+(defun org-plugin-ok-activate ()
+  "Activate `org-plugin-ok-mode'."
+  (require 'op-ok-src))
+
+(defun org-plugin-ok-deactivate ()
+  "Deactivate `org-plugin-ok-mode'."
+  nil)
+
+;;;###autoload
+(define-minor-mode org-plugin-ok-mode
+  "The `org-plugin-ok-mode' minor mode."
+  :global nil
+  :group 'org-plugin-ok-mode
+  (if org-plugin-ok-mode
+      (org-plugin-ok-activate)
+    (org-plugin-ok-deactivate)))
+
 (provide 'org-plugin-ok)
 ;;; org-plugin-ok.el ends here
