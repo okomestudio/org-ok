@@ -22,6 +22,35 @@
 
 (require 'org)
 
+;;; EMPHASIS
+;;
+;; See https://stackoverflow.com/a/24540651/515392
+;;
+(let ((regexp-components
+       `(;; pre match
+         ,(concat (string ?\[ ?\( ?{)
+                  "[:space:][:multibyte:]"
+                  (string ?\N{ZERO WIDTH SPACE}
+                          ?' ?‘ ?\" ?“
+                          ?| ?│
+                          ?— ?-))       ; "-" must be the last char
+         ;; post match
+         ,(concat (string ?\] ?\) ?})   ; "]" must be the first char
+                  "[:space:][:multibyte:]"
+                  (string ?\N{ZERO WIDTH SPACE}
+                          ?' ?’ ?\" ?”
+                          ?| ?│
+                          ?. ?, ?? ?! ?\; ?:
+                          ?s            ; allow use like =def=s
+                          ?— ?-))       ; "-" must be the last char
+         "[:space:]"                    ; forbidden border chars
+         "."                            ; body "."
+         1)))                           ; max newlines
+  ;; See `org-emph-re' and `org-verbatim-re' for the final regexps
+  (org-set-emph-re 'org-emphasis-regexp-components regexp-components))
+
+;;; Misc.
+
 (defun op-ok-org-add-properties (props)
   "Add properties.
 PROPS is a list of cons cells (keyword . values). When values is
