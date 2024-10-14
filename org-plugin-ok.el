@@ -32,6 +32,8 @@
 
 (defun org-plugin-ok-activate ()
   "Activate `org-plugin-ok-mode'."
+  (require 'op-ok-org)
+  (require 'op-ok-babel)
   (require 'op-ok-src))
 
 (defun org-plugin-ok-deactivate ()
