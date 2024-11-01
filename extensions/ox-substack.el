@@ -1,4 +1,4 @@
-;;; op-ok-export-substack.el --- Substack Export Plugin  -*- lexical-binding: t -*-
+;;; ox-substack.el --- Substack Backend for Org Export  -*- lexical-binding: t -*-
 ;;
 ;; Copyright (C) 2024 Taro Sato
 ;;
@@ -25,7 +25,7 @@
 
 (require 'ox)
 
-(defun op-ok-export--org-html-link (link desc info)
+(defun ox-substack--link (link desc info)
   "Org LINK translator."
   (let* ((raw-link (org-element-property :raw-link link))
          (raw-path (org-element-property :path link))
@@ -52,7 +52,7 @@
                 (let ((f (concat (file-name-sans-extension buffer-file-name)
                                  ".html")))
                   (org-open-file (org-export-to-file 'substack f nil s v b))))))))
-  :translate-alist '((link . op-ok-export--org-html-link)))
+  :translate-alist '((link . ox-substack--link)))
 
-(provide 'op-ok-export-substack)
-;;; op-ok-export-substack.el ends here
+(provide 'ox-substack)
+;;; ox-substack.el ends here
