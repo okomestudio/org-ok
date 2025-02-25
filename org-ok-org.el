@@ -1,6 +1,6 @@
-;;; op-ok-org.el --- Org Plugin  -*- lexical-binding: t -*-
+;;; org-ok-org.el --- Org Plugin  -*- lexical-binding: t -*-
 ;;
-;; Copyright (C) 2024 Taro Sato
+;; Copyright (C) 2024-2025 Taro Sato
 ;;
 ;;; License:
 ;;
@@ -51,7 +51,7 @@
 
 ;;; Misc.
 
-(defun op-ok-org-add-properties (props)
+(defun org-ok-org-add-properties (props)
   "Add properties.
 PROPS is a list of cons cells (keyword . values). When values is
 a list, its values are used as fixed values for the preset
@@ -69,5 +69,5 @@ properties."
                                    " "))))
       (add-to-list 'org-default-properties keyword))))
 
-(provide 'op-ok-org)
-;;; op-ok-org.el ends here
+(provide 'org-ok-org)
+;;; org-ok-org.el ends here

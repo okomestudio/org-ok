@@ -1,12 +1,12 @@
-;;; org-plugin-ok.el --- Org Plugin  -*- lexical-binding: t -*-
+;;; org-ok.el --- Org Plugin  -*- lexical-binding: t -*-
 ;;
-;; Copyright (C) 2024 Taro Sato
+;; Copyright (C) 2024-2025 Taro Sato
 ;;
 ;; Author: Taro Sato <okomestudio@gmail.com>
-;; URL: https://github.com/okomestudio/org-roam-plugin-ok
-;; Version: 0.1
+;; URL: https://github.com/okomestudio/org-ok
+;; Version: 0.2
 ;; Keywords: org-mode, plug-in
-;; Package-Requires: ((emacs "29.1") (org "9.7"))
+;; Package-Requires: ((emacs "30.1") (org "9.7"))
 ;;
 ;;; License:
 ;;
@@ -25,29 +25,29 @@
 ;;
 ;;; Commentary:
 ;;
-;; The `org-plugin-ok' mode is a plugin to enhance `org' in
-;; several ways. See the repository README for detail.
+;; The `org-ok' mode is a plugin to enhance `org' in several ways. See
+;; the repository README for detail.
 ;;
 ;;; Code:
 
-(defun org-plugin-ok-activate ()
-  "Activate `org-plugin-ok-mode'."
-  (require 'op-ok-org)
-  (require 'op-ok-babel)
-  (require 'op-ok-src))
+(defun org-ok-activate ()
+  "Activate `org-ok-mode'."
+  (require 'org-ok-org)
+  (require 'org-ok-babel)
+  (require 'org-ok-src))
 
-(defun org-plugin-ok-deactivate ()
-  "Deactivate `org-plugin-ok-mode'."
+(defun org-ok-deactivate ()
+  "Deactivate `org-ok-mode'."
   nil)
 
 ;;;###autoload
-(define-minor-mode org-plugin-ok-mode
-  "The `org-plugin-ok-mode' minor mode."
+(define-minor-mode org-ok-mode
+  "The `org-ok-mode' minor mode."
   :global nil
-  :group 'org-plugin-ok-mode
-  (if org-plugin-ok-mode
-      (org-plugin-ok-activate)
-    (org-plugin-ok-deactivate)))
+  :group 'org-ok-mode
+  (if org-ok-mode
+      (org-ok-activate)
+    (org-ok-deactivate)))
 
-(provide 'org-plugin-ok)
-;;; org-plugin-ok.el ends here
+(provide 'org-ok)
+;;; org-ok.el ends here

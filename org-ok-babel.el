@@ -1,6 +1,6 @@
-;;; op-ok-babel.el --- Org Babel Plugin  -*- lexical-binding: t -*-
+;;; org-ok-babel.el --- Org Babel Plugin  -*- lexical-binding: t -*-
 ;;
-;; Copyright (C) 2024 Taro Sato
+;; Copyright (C) 2024-2025 Taro Sato
 ;;
 ;;; License:
 ;;
@@ -22,7 +22,7 @@
 
 (require 'org)
 
-(defun op-ok-babel-run-pytest (&optional _ tangle-default)
+(defun org-ok-babel-run-pytest (&optional _ tangle-default)
   "Run ob-pytest using the current Python code block.
 If tangle is missing, it will default to TANGLE-DEFAULT if given
 or 't.py' if not given."
@@ -50,5 +50,5 @@ or 't.py' if not given."
       (recenter-top-bottom)
       (delete-file tangle))))
 
-(provide 'op-ok-babel)
-;;; op-ok-babel.el ends here
+(provide 'org-ok-babel)
+;;; org-ok-babel.el ends here
