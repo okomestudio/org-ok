@@ -6,7 +6,7 @@
 ;; URL: https://github.com/okomestudio/org-ok
 ;; Version: 0.2
 ;; Keywords: org-mode, plug-in
-;; Package-Requires: ((emacs "30.1") (org "9.7") (org-ref "3.1"))
+;; Package-Requires: ((emacs "30.1") (dash "2.13") (org "9.7") (org-ref "3.1"))
 ;;
 ;;; License:
 ;;
@@ -35,7 +35,8 @@
   (require 'org-ok-org)
   (require 'org-ok-babel)
   (require 'org-ok-src)
-  (require 'org-ok-ref))
+  (require 'org-ok-ref)
+  (require 'org-ok-utils))
 
 (defun org-ok-deactivate ()
   "Deactivate `org-ok-mode'."
