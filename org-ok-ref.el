@@ -25,29 +25,35 @@
 
 (require 'org-ref)
 
+(defun org-ok-ref--define-accessors (fields)
+  "Define Bibtex record field accessors from FIELDS."
+  (dolist (field fields)
+    (let ((name (concat "org-ok-ref-record-" field)))
+      (defalias (intern name)
+        (lambda (&rest _)
+          (assoc-default field org-ok-ref--record))
+        (format "Get field '%s' from the Bibtex record." field))))
+
+  (defun org-ok-ref-record-slug (&optional key)
+    "Get the slug for the current Bibtex record."
+    (org-ok-text-to-slug (org-ok-ref-record-title key)))
+
+  (defun org-ok-ref-record-title (&optional key)
+    "Get the title for the current Bibtex record."
+    (let ((title (org-ok-ref-record--field "title" key)))
+      (string-replace "}}" "" (string-replace "{{" "" title)))))
+
 (defun org-ok-ref-prompt ()
   "Prompt for a Bibtex key."
   (setq org-ok-ref--key (org-ref-read-key)
-        org-ok-ref--record (bibtex-completion-get-entry org-ok-ref--key)))
+        org-ok-ref--record (bibtex-completion-get-entry org-ok-ref--key))
+
+  (org-ok-ref--define-accessors (mapcar (lambda (e) (car e)) org-ok-ref--record)))
 
 (defun org-ok-ref-record--field (field &optional key)
   "Get the value for FIELD in the current bibtex record."
   (assoc-default field (or (and key (bibtex-completion-get-entry key))
                            org-ok-ref--record)))
-
-(defun org-ok-ref-record-author (&optional key)
-  (org-ok-ref-record--field "author" key))
-
-(defun org-ok-ref-record-guest (&optional key)
-  (org-ok-ref-record--field "guest" key))
-
-(defun org-ok-ref-record-slug (&optional key)
-  "Get the slug for the current bibtex record."
-  (org-roam-ok-string-to-org-slug (org-ok-ref-record-title key)))
-
-(defun org-ok-ref-record-title (&optional key)
-  (let ((title (org-ok-ref-record--field "title" key)))
-    (string-replace "}}" "" (string-replace "{{" "" title))))
 
 (defun org-ok-ref-record-citekey (&optional key)
   "Get the cite key for KEY.
