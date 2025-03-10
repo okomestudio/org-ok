@@ -25,13 +25,13 @@
 
 (require 'org-ref)
 
-(defun org-ok-ref--define-accessors (fields)
-  "Define Bibtex record field accessors from FIELDS."
-  (dolist (field fields)
+(defun org-ok-ref--define-accessors (record)
+  "Define Bibtex field accessors for RECORD."
+  (dolist (field (mapcar (lambda (e) (car e)) record))
     (let ((name (concat "org-ok-ref-record-" field)))
       (defalias (intern name)
         (lambda (&rest _)
-          (assoc-default field org-ok-ref--record))
+          (assoc-default field record))
         (format "Get field '%s' from the Bibtex record." field))))
 
   (defun org-ok-ref-record-slug (&optional key)
@@ -47,8 +47,8 @@
   "Prompt for a Bibtex key."
   (setq org-ok-ref--key (org-ref-read-key)
         org-ok-ref--record (bibtex-completion-get-entry org-ok-ref--key))
-
-  (org-ok-ref--define-accessors (mapcar (lambda (e) (car e)) org-ok-ref--record)))
+  (org-ok-ref--define-accessors org-ok-ref--record)
+  org-ok-ref--record)
 
 (defun org-ok-ref-record--field (field &optional key)
   "Get the value for FIELD in the current bibtex record."
@@ -59,6 +59,11 @@
   "Get the cite key for KEY.
 If not supplied, the stored key is used."
   (format "cite:&%s" (or key org-ok-ref--key)))
+
+(make-obsolete 'org-ok-ref--define-accessors 'org-roam-ok-capture "2025-03-09")
+(make-obsolete 'org-ok-ref-prompt 'org-roam-ok-capture "2025-03-09")
+(make-obsolete 'org-ok-ref-record--field 'org-roam-ok-capture "2025-03-09")
+(make-obsolete 'org-ok-ref-record-citekey 'org-roam-ok-capture "2025-03-09")
 
 (provide 'org-ok-ref)
 ;;; org-ok-ref.el ends here
