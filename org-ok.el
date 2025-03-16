@@ -4,8 +4,8 @@
 ;;
 ;; Author: Taro Sato <okomestudio@gmail.com>
 ;; URL: https://github.com/okomestudio/org-ok
-;; Version: 0.2
-;; Keywords: org-mode, plug-in
+;; Version: 0.2.1
+;; Keywords: org-mode, plug-in, convenience
 ;; Package-Requires: ((emacs "30.1") (dash "2.13") (org "9.7") (org-ref "3.1"))
 ;;
 ;;; License:
@@ -30,26 +30,39 @@
 ;;
 ;;; Code:
 
+(require 'org-ok-babel)
+(require 'org-ok-org)
+(require 'org-ok-ref)
+(require 'org-ok-src)
+(require 'org-ok-utils)
+
+(cl-defun org-ok-open-at-point--ad (fun &optional arg)
+  "Advise FUN (`org-open-at-point') to add enhancements.
+When called with the `\\[universal-argument'] prefix ARG, the link will
+be opened in the current window (default is to open in another window)."
+  (pcase (car arg)
+    ;; With a prefix argument, open the link in the same window
+    (4 (let ((org-link-frame-setup `((file . find-file)
+                                     . ,org-link-frame-setup)))
+         (funcall fun arg)))
+    (_ (funcall fun arg))))
+
+;;; Minor mode
+
 (defun org-ok-activate ()
   "Activate `org-ok-mode'."
-  (require 'org-ok-org)
-  (require 'org-ok-babel)
-  (require 'org-ok-src)
-  (require 'org-ok-ref)
-  (require 'org-ok-utils))
+  (advice-add #'org-open-at-point :around #'org-ok-open-at-point--ad))
 
 (defun org-ok-deactivate ()
   "Deactivate `org-ok-mode'."
-  nil)
+  (advice-remove #'org-open-at-point #'org-ok-open-at-point--ad))
 
 ;;;###autoload
 (define-minor-mode org-ok-mode
   "The `org-ok-mode' minor mode."
   :global nil
   :group 'org-ok-mode
-  (if org-ok-mode
-      (org-ok-activate)
-    (org-ok-deactivate)))
+  (if org-ok-mode (org-ok-activate) (org-ok-deactivate)))
 
 (provide 'org-ok)
 ;;; org-ok.el ends here
