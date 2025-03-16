@@ -1,0 +1,7 @@
+;; -*- mode: emacs-lisp; lexical-binding: t; no-byte-compile: t -*-
+
+;; explicitly set main file
+(setf eldev-project-main-file "org-ok.el")
+
+(eldev-use-package-archive 'gnu-elpa)
+(eldev-use-package-archive 'melpa)
