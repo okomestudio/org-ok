@@ -48,6 +48,12 @@
                                 end t 1)
         (replace-match "<<\\1>>")))))
 
+(defun org-ok-src--turn-off-hl-line-mode (&rest _)
+  "Turn off `hl-line-mode' in the `org-src' buffer."
+  (when (string-match-p "[ Table ]" (buffer-name))
+    (make-local-variable 'global-hl-line-mode)
+    (setq global-hl-line-mode nil)))
+
 (with-eval-after-load 'org-src
   (with-eval-after-load 'reformatter
     (defun org-ok-src-reformatter--do-region-ad (func name beg end &rest rest)

@@ -51,10 +51,12 @@ be opened in the current window (default is to open in another window)."
 
 (defun org-ok-activate ()
   "Activate `org-ok-mode'."
-  (advice-add #'org-open-at-point :around #'org-ok-open-at-point--ad))
+  (advice-add #'org-open-at-point :around #'org-ok-open-at-point--ad)
+  (add-hook 'org-src-mode-hook #'org-ok-src--turn-off-hl-line-mode))
 
 (defun org-ok-deactivate ()
   "Deactivate `org-ok-mode'."
+  (remove-hook 'org-src-mode-hook #'org-ok-src--turn-off-hl-line-mode)
   (advice-remove #'org-open-at-point #'org-ok-open-at-point--ad))
 
 ;;;###autoload
