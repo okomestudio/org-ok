@@ -23,8 +23,80 @@
 ;;
 ;;; Code:
 
+(require 'dash)
 (require 'ok)
 (require 'org-ref)
+
+(defun org-ok-ref-link-description (bibentry style)
+  "Render link description for BIBENTRY in STYLE."
+  (let* ((authors (or (bibtex-completion-get-value "author" bibentry)
+                      (bibtex-completion-get-value "editor" bibentry)))
+         (year (bibtex-completion-get-value "date" bibentry "N/A")))
+    (setq authors (--map (if (string-match "\\(.*\\),.*" it)
+                             (format "%s" (match-string 1 it))
+                           it)
+                         (split-string authors " and ")))
+    (setq authors (cond ((= (length authors) 1)
+                         (nth 0 authors))
+                        ((= (length authors) 2)
+                         (format "%s & %s" (nth 0 authors) (nth 1 authors)))
+                        ((>= (length authors) 3)
+                         (format "%s et al." (nth 0 authors)))
+                        (t "N/A")))
+    (setq year (if (string-match "\\([0-9]\\{4\\}\\)" year)
+                   (match-string 1 year)
+                 year))
+    (pcase style
+      ('title (bibtex-completion-get-value "title" bibentry))
+      ('short-paren (format "%s (%s)" authors year))
+      ('short (format "%s %s" authors year))
+      ('long (format "%s" authors)))))
+
+(defun org-ok-ref-link-insert (&optional _arg)
+  "Insert or update a cite link.
+This command insert a new link or updates an existing link if the point is on a
+link.
+
+The prefix argument sets the style for `org-ok-ref-link-description':
+
+- 1: title
+- 4: short-paren
+- 16: short
+- 64: long
+
+See the help for `org-ok-ref-link-description' for the descriptions of available styles."
+  (interactive "P")
+  (let* (range
+         (key
+          (if-let*
+              ((link (and (org-in-regexp org-link-any-re)
+                          (substring-no-properties (match-string 0))))
+               (start (match-beginning 0))
+               (end (match-end 0))
+               (key (and (string-match "^\\[\\[cite:&\\([^]]*\\)\\].*" link)
+                         (match-string 1 link))))
+              (progn
+                (setq range (list start end))
+                key)
+            (org-ref-read-key)))
+         (bibentry (bibtex-completion-get-entry key))
+         (style (pcase _arg
+                  ('1 'title)
+                  ('4 'short-paren) ('(4) 'short-paren)
+                  ('16 'short) ('(16) 'short)
+                  ('64 'long) ('(64) 'long))))
+    (when-let* ((start (car range))
+                (end (cadr range)))
+      (delete-region start end)
+      (goto-char start))
+    (org-insert-link nil
+                     (format "cite:&%s" key)
+                     (org-ok-ref-link-description bibentry style))))
+
+;;; Obsolete Utility Functions
+;;
+;; These functions were obsoleted when the feature needing them was consolidated
+;; and moved to `org-roam-ok-capture'.
 
 (defun org-ok-ref--define-accessors (record)
   "Define Bibtex field accessors for RECORD."
