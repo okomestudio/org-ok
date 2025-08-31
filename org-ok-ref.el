@@ -27,9 +27,10 @@
 (require 'ok)
 (require 'org-ref)
 
-(defun org-ok-ref-link-description (bibentry style)
-  "Render link description for BIBENTRY in STYLE."
-  (let* ((authors (or (bibtex-completion-get-value "author" bibentry)
+(defun org-ok-ref-link-description (key style)
+  "Render link description for cite KEY in STYLE."
+  (let* ((bibentry (bibtex-completion-get-entry key))
+         (authors (or (bibtex-completion-get-value "author" bibentry)
                       (bibtex-completion-get-value "editor" bibentry)))
          (year (bibtex-completion-get-value "date" bibentry "N/A")))
     (setq authors (--map (if (string-match "\\(.*\\),.*" it)
@@ -50,7 +51,8 @@
       ('title (bibtex-completion-get-value "title" bibentry))
       ('short-paren (format "%s (%s)" authors year))
       ('short (format "%s %s" authors year))
-      ('long (format "%s" authors)))))
+      ('long (format "%s" authors))
+      ('full (bibtex-completion-apa-format-reference key)))))
 
 (defun org-ok-ref-link-insert (&optional _arg)
   "Insert or update a cite link.
@@ -79,19 +81,19 @@ See the help for `org-ok-ref-link-description' for the descriptions of available
                 (setq range (list start end))
                 key)
             (org-ref-read-key)))
-         (bibentry (bibtex-completion-get-entry key))
          (style (pcase _arg
                   ('1 'title)
                   ('4 'short-paren) ('(4) 'short-paren)
                   ('16 'short) ('(16) 'short)
-                  ('64 'long) ('(64) 'long))))
+                  ('64 'long) ('(64) 'long)
+                  ('256 'full) ('(256) 'full))))
     (when-let* ((start (car range))
                 (end (cadr range)))
       (delete-region start end)
       (goto-char start))
     (org-insert-link nil
                      (format "cite:&%s" key)
-                     (org-ok-ref-link-description bibentry style))))
+                     (org-ok-ref-link-description key style))))
 
 ;;; Obsolete Utility Functions
 ;;
