@@ -27,6 +27,12 @@
 (require 'ok)
 (require 'org-ref)
 
+(defun org-ok-ref-title--sanitize (title)
+  "Sanitize string TITLE for display."
+  (setq title (replace-regexp-in-string "{{\\([^}]+\\)}}" "\\1" title))
+  (setq title (replace-regexp-in-string "\\\\&" "&" title))
+  title)
+
 (defun org-ok-ref-link-description (key style)
   "Render link description for cite KEY in STYLE."
   (let* ((bibentry (bibtex-completion-get-entry key))
@@ -48,7 +54,8 @@
                    (match-string 1 year)
                  year))
     (pcase style
-      ('title (bibtex-completion-get-value "title" bibentry))
+      ('title (org-ok-ref-title--sanitize
+               (bibtex-completion-get-value "title" bibentry)))
       ('short-paren (format "%s (%s)" authors year))
       ('short (format "%s %s" authors year))
       ('long (format "%s" authors))
