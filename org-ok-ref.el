@@ -26,6 +26,21 @@
 (require 'dash)
 (require 'ok)
 (require 'org-ref)
+(require 's)
+
+(defun org-ok-ref-format-author (authors)
+  "Format BibTeX AUTHORS list.
+See `bibtex-completion-shorten-authors' for reference."
+  (cl-loop for a in (s-split " and " authors)
+           for p = (--map (s-trim it) (s-split "," a t))
+           for sep = "" then ", "
+           concat sep
+           if (eq 1 (length p))
+           concat (car p)
+           else
+           concat (if (ok-string-contains-ja-p (car p))
+                      (concat (car p) (cadr p))
+                    (concat (cadr p) " " (car p)))))
 
 (defun org-ok-ref-title--sanitize (title)
   "Sanitize string TITLE for display."
