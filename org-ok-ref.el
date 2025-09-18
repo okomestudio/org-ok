@@ -88,9 +88,18 @@ See `bibtex-completion-shorten-authors' for reference."
   "Sanitize string person's NAME for display."
   (replace-regexp-in-string "{\\([^}]+\\)}" "\\1" name))
 
+(defun org-ok-ref-bibtex--langid-to-lang (langid)
+  "Convert string LANGID to lang, a symbol."
+  (pcase langid
+    ("english"  'en)
+    ("japanese" 'ja)
+    (_ 'en)))
+
 (defun org-ok-ref-bibtex-entry (key)
-  "Retrieve BibTeX entry with KEY as an alist."
+  "Format the BibTeX entry with KEY for use with format string."
   (let* ((entry (bibtex-completion-get-entry key))
+         (lang (org-ok-ref-bibtex--langid-to-lang
+                (bibtex-completion-get-value "langid" entry)))
          (person-names
           (--map (org-ok-ref-bibtex--sanitize-person-name it)
                  (split-string
@@ -105,18 +114,24 @@ See `bibtex-completion-shorten-authors' for reference."
     (setq year (if (string-match "\\([0-9]\\{4\\}\\)" year)
                    (match-string 1 year)
                  year))
+
     (setq authors (--map (if (string-match "\\(.*\\),.*" it)
                              (format "%s" (match-string 1 it))
                            it)
                          person-names))
-    (setq authors-full
-          (--map (if (string-match "\\(.*\\), \\(.*\\)\\s-*" it)
-                     (format (ok-mule-s "%s %s")
-                             (match-string (if (ok-mule-lang-p 'ja) 1 2) it)
-                             (match-string (if (ok-mule-lang-p 'ja) 2 1) it))
-                   it)
-                 person-names))
     (setq authors (org-ok-ref-name--etal authors))
+
+    (setq authors-full
+          (--map
+           (if (string-match "\\(.*\\), \\(.*\\)\\s-*" it)
+               (let ((last-name (match-string 1 it))
+                     (first-name (match-string 2 it)))
+                 (apply #'format
+                        (pcase lang
+                          ('ja `("%s%s" ,last-name ,first-name))
+                          (_ `("%s %s" ,first-name ,last-name)))))
+             it)
+           person-names))
     (setq authors-full (org-ok-ref-name--etal authors-full))
 
     (list (cons "authors" authors)
