@@ -63,9 +63,6 @@ See `bibtex-completion-shorten-authors' for reference."
 (push '("%s et al." . ((ja . "%s他"))) ok-mule-s)
 (push '("%s & %s" . ((ja . "%s＆%s"))) ok-mule-s)
 (push '("%s %s" . ((ja . "%s%s"))) ok-mule-s)
-(push '("${authors-full} /[[${citekey}][${title}]]/ (${publisher}, ${year})"
-        . ((ja . "${authors-full}『[[${citekey}][${title}]]』（${publisher}、${year}）")))
-      ok-mule-s)
 
 (defun org-ok-ref-name--etal (names)
   "Format NAMES with et al."
@@ -77,16 +74,23 @@ See `bibtex-completion-shorten-authors' for reference."
         ((>= (length names) 3)
          (format (ok-mule-s "%s et al.")
                  (nth 0 names)))
-        (t "N/A")))
+        (t "")))
 
 (defun org-ok-ref-bibtex--sanitize-title (title)
   "Sanitize string TITLE for display."
   (setq title (replace-regexp-in-string "{{\\([^}]+\\)}}" "\\1" title))
   (replace-regexp-in-string "\\\\&" "&" title))
 
-(defun org-ok-ref-bibtex--sanitize-person-name (name)
-  "Sanitize string person's NAME for display."
-  (replace-regexp-in-string "{\\([^}]+\\)}" "\\1" name))
+(defun org-ok-ref-bibtex--prep-person-name (s)
+  "Preprocess person name in string S for internal use."
+  (when s
+    (--map
+     (if (string-match "\\(.*\\), \\(.*\\)\\s-*" it)
+         (let ((last-name (match-string 1 it))
+               (first-name (match-string 2 it)))
+           (cons last-name first-name))
+       (cons it nil))
+     (s-split " and " (replace-regexp-in-string "{\\([^}]+\\)}" "\\1" s)))))
 
 (defun org-ok-ref-bibtex--langid-to-lang (langid)
   "Convert string LANGID to lang, a symbol."
@@ -100,63 +104,76 @@ See `bibtex-completion-shorten-authors' for reference."
   (let* ((entry (bibtex-completion-get-entry key))
          (lang (org-ok-ref-bibtex--langid-to-lang
                 (bibtex-completion-get-value "langid" entry)))
-         (person-names
-          (--map (org-ok-ref-bibtex--sanitize-person-name it)
-                 (split-string
-                  (or (bibtex-completion-get-value "author" entry)
-                      (bibtex-completion-get-value "editor" entry))
-                  " and ")))
+         (authors (org-ok-ref-bibtex--prep-person-name
+                   (bibtex-completion-get-value "author" entry)))
+         (editors (org-ok-ref-bibtex--prep-person-name
+                   (bibtex-completion-get-value "editor" entry)))
          (title (org-ok-ref-bibtex--sanitize-title
                  (bibtex-completion-get-value "title" entry)))
+         (location (bibtex-completion-get-value "location" entry))
          (publisher (bibtex-completion-get-value "publisher" entry ""))
          (year (bibtex-completion-get-value "date" entry "N/A"))
          authors-full)
-    (setq year (if (string-match "\\([0-9]\\{4\\}\\)" year)
-                   (match-string 1 year)
-                 year))
-
-    (setq authors (--map (if (string-match "\\(.*\\),.*" it)
-                             (format "%s" (match-string 1 it))
-                           it)
-                         person-names))
-    (setq authors (org-ok-ref-name--etal authors))
-
-    (setq authors-full
-          (--map
-           (if (string-match "\\(.*\\), \\(.*\\)\\s-*" it)
-               (let ((last-name (match-string 1 it))
-                     (first-name (match-string 2 it)))
-                 (apply #'format
-                        (pcase lang
-                          ('ja `("%s%s" ,last-name ,first-name))
-                          (_ `("%s %s" ,first-name ,last-name)))))
-             it)
-           person-names))
-    (setq authors-full (org-ok-ref-name--etal authors-full))
-
-    (list (cons "authors" authors)
-          (cons "authors-full" authors-full)
+    (list (cons "authors" (org-ok-ref-name--etal (--map (car it) authors)))
+          (cons "authors-full"
+                (org-ok-ref-name--etal
+                 (--map (if-let* ((ln (car it)) (fn (cdr it)))
+                            (apply #'format
+                                   (pcase lang
+                                     ('ja `("%s%s" ,ln ,fn))
+                                     (_ `("%s %s" ,fn ,ln))))
+                          (car it))
+                        authors)))
+          (cons "editors" (org-ok-ref-name--etal (--map (car it) editors)))
+          (cons "editors-full"
+                (org-ok-ref-name--etal
+                 (--map (if-let* ((ln (car it)) (fn (cdr it)))
+                            (apply #'format
+                                   (pcase lang
+                                     ('ja `("%s%s" ,ln ,fn))
+                                     (_ `("%s %s" ,fn ,ln))))
+                          (car it))
+                        editors)))
           (cons "title" title)
+          (cons "location" location)
           (cons "publisher" publisher)
-          (cons "year" year))))
+          (cons "year" (if (string-match "\\([0-9]\\{4\\}\\)" year)
+                           (match-string 1 year)
+                         year)))))
 
-(defun org-ok-ref-format-string--apa (key)
+(defun org-ok-ref-format-string--apa (key entry)
+  "Render the BibTeX entry with KEY in the APA style.
+ENTRY is created by `org-ok-ref-bibtex-entry'."
   (format "[[${citekey}][%s]]" (bibtex-completion-apa-format-reference key)))
 
-(defun org-ok-ref-format-string--full-inline (key)
-  (ok-mule-s "${authors-full} /[[${citekey}][${title}]]/ (${publisher}, ${year})"))
+(defun org-ok-ref-format-string--chicago-in-text (key entry)
+  "Render the BibTeX entry with KEY in a in-text Chicago style.
+ENTRY is created by `org-ok-ref-bibtex-entry'."
+  (ok-mule-s
+   (concat (if (and (s-blank? (cdr (assoc-string "authors-full" entry)))
+                    (assoc-string "editors-full" entry))
+               "${editors-full} (ed.), "
+             "${authors-full}, ")
+           "/[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})")))
+
+(push '("${authors-full}, /[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"
+        . ((ja . "${authors-full}『[[${citekey}][${title}]]』（${publisher}、${year}）")))
+      ok-mule-s)
+(push '("${editors-full} (ed.), /[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"
+        . ((ja . "${editors-full}編『[[${citekey}][${title}]]』（${publisher}、${year}）")))
+      ok-mule-s)
 
 (defvar org-ok-ref-format-string
   '((book
      . ((apa . org-ok-ref-format-string--apa)
         (author-year-paren . "[[${citekey}][${authors} (${year})]]")
         (author-year . "[[${citekey}][${authors} ${year}]]")
-        (full-inline . org-ok-ref-format-string--full-inline)))
+        (full-inline . org-ok-ref-format-string--chicago-in-text)))
     (_
      . ((apa . org-ok-ref-format-string--apa)
         (author-year-paren . "[[${citekey}][${authors} (${year})]]")
         (author-year . "[[${citekey}][${authors} ${year}]]")
-        (full-inline . org-ok-ref-format-string--full-inline))))
+        (full-inline . org-ok-ref-format-string--chicago-in-text))))
   "String formats for BibTeX entry types.")
 
 (defun org-ok-ref-link-insert (&optional _arg)
@@ -217,7 +234,7 @@ The default style is 'Authors _Title_ (Publisher, Year)'."
       (delete-region start end)
       (goto-char start))
 
-    (insert (s-format (if (stringp fstring) fstring (funcall fstring key))
+    (insert (s-format (if (stringp fstring) fstring (funcall fstring key entry))
                       (lambda (field entry) (cdr (assoc-string field entry)))
                       entry))))
 
