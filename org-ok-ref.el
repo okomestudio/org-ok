@@ -76,7 +76,7 @@ See `bibtex-completion-shorten-authors' for reference."
                  (nth 0 names)))
         (t "")))
 
-(defun org-ok-ref-bibtex--sanitize-title (title)
+(defun org-ok-ref-bibtex--prep-title (title)
   "Sanitize string TITLE for display."
   (setq title (replace-regexp-in-string "{{\\([^}]+\\)}}" "\\1" title))
   (replace-regexp-in-string "\\\\&" "&" title))
@@ -99,47 +99,89 @@ See `bibtex-completion-shorten-authors' for reference."
     ("japanese" 'ja)
     (_ 'en)))
 
+(defun org-ok-ref-bibtex--name-full (name lang)
+  "Format NAME for display in LANG."
+  (if-let* ((last-name (car name)) (first-name (cdr name)))
+      (apply #'format (pcase lang
+                        ('ja `("%s%s" ,last-name ,first-name))
+                        (_ `("%s %s" ,first-name ,last-name))))
+    (car name)))
+
+(defun org-ok-ref-bibtex--date (year month day lang)
+  "Format YEAR, MONTH, and DAY in LANG."
+  (let* ((year (and year
+                    (pcase lang
+                      ('ja (format "%d年" year))
+                      (_ year))))
+         (month
+          (and month
+               (pcase lang
+                 ('ja (format "%d月" month))
+                 (nth (1- month)
+                      '("January" "Feburury" "March"
+                        "April" "May" "June"
+                        "July" "August" "September"
+                        "October" "November" "December")))))
+         (day (and day (pcase lang
+                         ('ja (format "%d日" day))
+                         (_ day)))))
+    (pcase lang
+      ('ja (concat year month day))
+      (_ (cond
+          ((and year month day)
+           (format "%s %d, %d" month day year))
+          ((and year month)
+           (format "%s, %d" month year))
+          (year
+           (format "%d" year))
+          (t "N/A"))))))
+
+(defmacro org-ok-ref-bibtex--get (field entry &optional default)
+  "Get the value for FIELD in BibTeX ENTRY.
+DEFAULT is returned if the value for FIELD does not exist."
+  `(bibtex-completion-get-value ,field ,entry ,default))
+
 (defun org-ok-ref-bibtex-entry (key)
   "Format the BibTeX entry with KEY for use with format string."
   (let* ((entry (bibtex-completion-get-entry key))
+         (type (org-ok-ref-bibtex--get "=type=" entry))
+         (subtype (org-ok-ref-bibtex--get "entrysubtype" entry))
          (lang (org-ok-ref-bibtex--langid-to-lang
-                (bibtex-completion-get-value "langid" entry)))
+                (org-ok-ref-bibtex--get "langid" entry)))
+         (title (org-ok-ref-bibtex--prep-title
+                 (org-ok-ref-bibtex--get "title" entry)))
          (authors (org-ok-ref-bibtex--prep-person-name
-                   (bibtex-completion-get-value "author" entry)))
+                   (org-ok-ref-bibtex--get "author" entry)))
          (editors (org-ok-ref-bibtex--prep-person-name
-                   (bibtex-completion-get-value "editor" entry)))
-         (title (org-ok-ref-bibtex--sanitize-title
-                 (bibtex-completion-get-value "title" entry)))
-         (location (bibtex-completion-get-value "location" entry))
-         (publisher (bibtex-completion-get-value "publisher" entry ""))
-         (year (bibtex-completion-get-value "date" entry "N/A"))
-         authors-full)
-    (list (cons "authors" (org-ok-ref-name--etal (--map (car it) authors)))
-          (cons "authors-full"
-                (org-ok-ref-name--etal
-                 (--map (if-let* ((ln (car it)) (fn (cdr it)))
-                            (apply #'format
-                                   (pcase lang
-                                     ('ja `("%s%s" ,ln ,fn))
-                                     (_ `("%s %s" ,fn ,ln))))
-                          (car it))
-                        authors)))
-          (cons "editors" (org-ok-ref-name--etal (--map (car it) editors)))
-          (cons "editors-full"
-                (org-ok-ref-name--etal
-                 (--map (if-let* ((ln (car it)) (fn (cdr it)))
-                            (apply #'format
-                                   (pcase lang
-                                     ('ja `("%s%s" ,ln ,fn))
-                                     (_ `("%s %s" ,fn ,ln))))
-                          (car it))
-                        editors)))
-          (cons "title" title)
-          (cons "location" location)
-          (cons "publisher" publisher)
-          (cons "year" (if (string-match "\\([0-9]\\{4\\}\\)" year)
-                           (match-string 1 year)
-                         year)))))
+                   (org-ok-ref-bibtex--get "editor" entry)))
+         (date (parse-time-string (org-ok-ref-bibtex--get "date" entry ""))))
+    (append
+     (list (cons 'citekey (format "cite:&%s" key))
+           (cons 'type type)
+           (cons 'lang lang)
+           (cons 'title title)
+           (cons 'authors (org-ok-ref-name--etal (-map #'car authors)))
+           (cons 'authors-full (org-ok-ref-name--etal
+                                (--map (org-ok-ref-bibtex--name-full it lang)
+                                       authors)))
+           (cons 'year (decoded-time-year date)))
+     (cond
+      ((and (string= type "article") (string= subtype "magazine"))
+       (list (cons 'subtype subtype)
+             (cons 'journaltitle (org-ok-ref-bibtex--get "journaltitle" entry))
+             (cons 'month (decoded-time-month date))
+             (cons 'day (decoded-time-day date))
+             (cons 'pages (s-join "-"
+                                  (s-split "--"
+                                           (org-ok-ref-bibtex--get "pages" entry))))))
+      (t
+       (list (cons 'subtype subtype)
+             (cons 'editors (org-ok-ref-name--etal (-map #'car editors)))
+             (cons 'editors-full (org-ok-ref-name--etal
+                                  (--map (org-ok-ref-bibtex--name-full it lang)
+                                         editors)))
+             (cons 'location (org-ok-ref-bibtex--get "location" entry ""))
+             (cons 'publisher (org-ok-ref-bibtex--get "publisher" entry ""))))))))
 
 (defun org-ok-ref-format-string--apa (key entry)
   "Render the BibTeX entry with KEY in the APA style.
@@ -149,30 +191,43 @@ ENTRY is created by `org-ok-ref-bibtex-entry'."
 (defun org-ok-ref-format-string--chicago-in-text (key entry)
   "Render the BibTeX entry with KEY in a in-text Chicago style.
 ENTRY is created by `org-ok-ref-bibtex-entry'."
-  (ok-mule-s
-   (concat (if (and (s-blank? (cdr (assoc-string "authors-full" entry)))
-                    (assoc-string "editors-full" entry))
-               "${editors-full} (ed.), "
-             "${authors-full}, ")
-           "/[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})")))
-
-(push '("${authors-full}, /[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"
-        . ((ja . "${authors-full}『[[${citekey}][${title}]]』（${publisher}、${year}）")))
-      ok-mule-s)
-(push '("${editors-full} (ed.), /[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"
-        . ((ja . "${editors-full}編『[[${citekey}][${title}]]』（${publisher}、${year}）")))
-      ok-mule-s)
+  (let ((ok-mule-s
+         '(("${authors-full}, “[[${citekey}][${title}]]” (/${journaltitle}/, ${date}, ${pages})"
+            . ((ja . "${authors-full}「[[${citekey}][${title}]]」（/${journaltitle}/、${date}、${pages}）")))
+           ("${authors-full}, /[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"
+            . ((ja . "${authors-full}『[[${citekey}][${title}]]』（${publisher}、${year}）")))
+           ("${editors-full} (ed.), /[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"
+            . ((ja . "${editors-full}編『[[${citekey}][${title}]]』（${publisher}、${year}）"))))))
+    (ok-mule-s
+     (cond
+      ((and (string= (alist-get 'type entry) "article")
+            (string= (alist-get 'subtype entry) "magazine"))
+       (concat
+        "${authors-full}, "
+        "“[[${citekey}][${title}]]” (/${journaltitle}/, ${date}, ${pages})"))
+      (t
+       (concat
+        (if (and (s-blank? (alist-get 'authors-full entry))
+                 (alist-get 'editors-full entry))
+            "${editors-full} (ed.), "
+          "${authors-full}, ")
+        "/[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"))))))
 
 (defvar org-ok-ref-format-string
-  '((book
+  '((article
      . ((apa . org-ok-ref-format-string--apa)
-        (author-year-paren . "[[${citekey}][${authors} (${year})]]")
         (author-year . "[[${citekey}][${authors} ${year}]]")
+        (author-year-paren . "[[${citekey}][${authors} (${year})]]")
+        (full-inline . org-ok-ref-format-string--chicago-in-text)))
+    (book
+     . ((apa . org-ok-ref-format-string--apa)
+        (author-year . "[[${citekey}][${authors} ${year}]]")
+        (author-year-paren . "[[${citekey}][${authors} (${year})]]")
         (full-inline . org-ok-ref-format-string--chicago-in-text)))
     (_
      . ((apa . org-ok-ref-format-string--apa)
-        (author-year-paren . "[[${citekey}][${authors} (${year})]]")
         (author-year . "[[${citekey}][${authors} ${year}]]")
+        (author-year-paren . "[[${citekey}][${authors} (${year})]]")
         (full-inline . org-ok-ref-format-string--chicago-in-text))))
   "String formats for BibTeX entry types.")
 
@@ -224,19 +279,25 @@ The default style is 'Authors _Title_ (Publisher, Year)'."
          (entry (org-ok-ref-bibtex-entry key))
          (fstring
           (alist-get style
-                     (alist-get (bibtex-completion-get-value "=type=" entry)
+                     (alist-get (intern (alist-get 'type entry))
                                 org-ok-ref-format-string
                                 (alist-get '_ org-ok-ref-format-string)))))
-    (push `("citekey" . ,(format "cite:&%s" key)) entry)
-
     ;; Delete the existing link
     (when-let* ((start (car range)) (end (cadr range)))
       (delete-region start end)
       (goto-char start))
 
-    (insert (s-format (if (stringp fstring) fstring (funcall fstring key entry))
-                      (lambda (field entry) (cdr (assoc-string field entry)))
-                      entry))))
+    (insert
+     (s-format (if (stringp fstring) fstring (funcall fstring key entry))
+               (lambda (field entry)
+                 (pcase field
+                   ("date"
+                    (org-ok-ref-bibtex--date (alist-get 'year entry)
+                                             (alist-get 'month entry)
+                                             (alist-get 'day entry)
+                                             (alist-get 'lang entry)))
+                   (_ (alist-get (intern field) entry))))
+               entry))))
 
 ;;; Obsolete Utility Functions
 ;;
