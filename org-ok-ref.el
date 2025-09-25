@@ -24,27 +24,10 @@
 ;;; Code:
 
 (require 'dash)
+(require 'mulex)
 (require 'ok)
 (require 'org-ref)
 (require 's)
-
-;;; MULE utility
-
-(defvar ok-mule-s nil)
-
-(defun ok-mule-lang-p (lang)
-  "TBD."
-  (if (eq lang 'ja)
-      current-input-method))
-
-(defun ok-mule-s (text &optional lang)
-  "Render TEXT in the current language.
-If LANG, a two-char symbol, is not given, it will be auto-discovered, currently
-`ja' only. The default is `en'."
-  (let ((lang (or lang (if current-input-method 'ja 'en))))
-    (alist-get lang (alist-get text ok-mule-s nil nil #'equal) text)))
-
-;;;
 
 (defun org-ok-ref-format-author (authors)
   "Format BibTeX AUTHORS list.
@@ -60,29 +43,37 @@ See `bibtex-completion-shorten-authors' for reference."
                       (concat (car p) (cadr p))
                     (concat (cadr p) " " (car p)))))
 
-(push '("%s et al." . ((ja . "%s他"))) ok-mule-s)
-(push '("%s & %s" . ((ja . "%s＆%s"))) ok-mule-s)
-(push '("%s %s" . ((ja . "%s%s"))) ok-mule-s)
+(defun org-ok-ref-bibtex--name-full (name lang)
+  "Format NAME for display in LANG."
+  (if-let* ((last-name (car name)) (first-name (cdr name)))
+      (apply #'format (pcase lang
+                        ('ja `("%s%s" ,last-name ,first-name))
+                        (_ `("%s %s" ,first-name ,last-name))))
+    (car name)))
 
-(defun org-ok-ref-name--etal (names)
+(defun org-ok-ref-bibtex--name-etal (names)
   "Format NAMES with et al."
   (cond ((= (length names) 1)
          (nth 0 names))
         ((= (length names) 2)
-         (format (ok-mule-s "%s & %s")
+         (format (mulex-s "%s & %s" ((ja . "%s＆%s")))
                  (nth 0 names) (nth 1 names)))
         ((>= (length names) 3)
-         (format (ok-mule-s "%s et al.")
-                 (nth 0 names)))
-        (t "")))
+         (format (mulex-s "%s et al." ((ja . "%s他")))
+                 (nth 0 names)))))
 
-(defun org-ok-ref-bibtex--prep-title (title)
-  "Sanitize string TITLE for display."
-  (setq title (replace-regexp-in-string "{{\\([^}]+\\)}}" "\\1" title))
-  (replace-regexp-in-string "\\\\&" "&" title))
+(defun org-ok-ref-bibtex--prep-date (s-date)
+  "Preprocess string date S-DATE."
+  (mulex-date-decode s-date))
+
+(defalias #'org-ok-ref-bibtex--prep-urldate #'org-ok-ref-bibtex--prep-date)
+
+(defun org-ok-ref-bibtex--prep-langid (langid)
+  "Preprocess string LANGID to lang."
+  (alist-get langid mulex-languages nil nil #'equal))
 
 (defun org-ok-ref-bibtex--prep-person-name (s)
-  "Preprocess person name in string S for internal use."
+  "Preprocess person names in string S."
   (when s
     (--map
      (if (string-match "\\(.*\\), \\(.*\\)\\s-*" it)
@@ -92,78 +83,46 @@ See `bibtex-completion-shorten-authors' for reference."
        (cons it nil))
      (s-split " and " (replace-regexp-in-string "{\\([^}]+\\)}" "\\1" s)))))
 
-(defun org-ok-ref-bibtex--langid-to-lang (langid)
-  "Convert string LANGID to lang, a symbol."
-  (pcase langid
-    ("english"  'en)
-    ("japanese" 'ja)
-    (_ 'en)))
+(defalias #'org-ok-ref-bibtex--prep-author #'org-ok-ref-bibtex--prep-person-name)
+(defalias #'org-ok-ref-bibtex--prep-editor #'org-ok-ref-bibtex--prep-person-name)
 
-(defun org-ok-ref-bibtex--name-full (name lang)
-  "Format NAME for display in LANG."
-  (if-let* ((last-name (car name)) (first-name (cdr name)))
-      (apply #'format (pcase lang
-                        ('ja `("%s%s" ,last-name ,first-name))
-                        (_ `("%s %s" ,first-name ,last-name))))
-    (car name)))
+(defun org-ok-ref-bibtex--prep-publisher (publisher)
+  "Preprocess string PUBLISHER."
+  (setq publisher (replace-regexp-in-string "{{\\([^}]+\\)}}" "\\1" publisher))
+  (replace-regexp-in-string "\\\\&" "&" publisher))
 
-(defun org-ok-ref-bibtex--date (year month day lang)
-  "Format YEAR, MONTH, and DAY in LANG."
-  (let* ((year (and year
-                    (pcase lang
-                      ('ja (format "%d年" year))
-                      (_ year))))
-         (month
-          (and month
-               (pcase lang
-                 ('ja (format "%d月" month))
-                 (nth (1- month)
-                      '("January" "Feburury" "March"
-                        "April" "May" "June"
-                        "July" "August" "September"
-                        "October" "November" "December")))))
-         (day (and day (pcase lang
-                         ('ja (format "%d日" day))
-                         (_ day)))))
-    (pcase lang
-      ('ja (concat year month day))
-      (_ (cond
-          ((and year month day)
-           (format "%s %d, %d" month day year))
-          ((and year month)
-           (format "%s, %d" month year))
-          (year
-           (format "%d" year))
-          (t "N/A"))))))
+(defun org-ok-ref-bibtex--prep-title (title)
+  "Preprocess string TITLE."
+  (setq title (replace-regexp-in-string "{{\\([^}]+\\)}}" "\\1" title))
+  (replace-regexp-in-string "\\\\&" "&" title))
 
-(defmacro org-ok-ref-bibtex--get (field entry &optional default)
+(defun org-ok-ref-bibtex--get (field entry &optional default)
   "Get the value for FIELD in BibTeX ENTRY.
 DEFAULT is returned if the value for FIELD does not exist."
-  `(bibtex-completion-get-value ,field ,entry ,default))
+  (let ((result (bibtex-completion-get-value field entry default))
+        (prep-fun (intern (concat "org-ok-ref-bibtex--prep-" field))))
+    (if (fboundp prep-fun) (funcall prep-fun result) result)))
 
 (defun org-ok-ref-bibtex-entry (key)
   "Format the BibTeX entry with KEY for use with format string."
   (let* ((entry (bibtex-completion-get-entry key))
          (type (org-ok-ref-bibtex--get "=type=" entry))
          (subtype (org-ok-ref-bibtex--get "entrysubtype" entry))
-         (lang (org-ok-ref-bibtex--langid-to-lang
-                (org-ok-ref-bibtex--get "langid" entry)))
-         (title (org-ok-ref-bibtex--prep-title
-                 (org-ok-ref-bibtex--get "title" entry)))
-         (authors (org-ok-ref-bibtex--prep-person-name
-                   (org-ok-ref-bibtex--get "author" entry)))
-         (editors (org-ok-ref-bibtex--prep-person-name
-                   (org-ok-ref-bibtex--get "editor" entry)))
-         (date (parse-time-string (org-ok-ref-bibtex--get "date" entry ""))))
+         (lang (org-ok-ref-bibtex--get "langid" entry))
+         (title (org-ok-ref-bibtex--get "title" entry))
+         (authors (org-ok-ref-bibtex--get "author" entry))
+         (editors (org-ok-ref-bibtex--get "editor" entry))
+         (date (org-ok-ref-bibtex--get "date" entry)))
     (append
      (list (cons 'citekey (format "cite:&%s" key))
            (cons 'type type)
            (cons 'lang lang)
            (cons 'title title)
-           (cons 'authors (org-ok-ref-name--etal (-map #'car authors)))
-           (cons 'authors-full (org-ok-ref-name--etal
+           (cons 'authors (org-ok-ref-bibtex--name-etal (-map #'car authors)))
+           (cons 'authors-full (org-ok-ref-bibtex--name-etal
                                 (--map (org-ok-ref-bibtex--name-full it lang)
                                        authors)))
+           (cons 'date date)
            (cons 'year (decoded-time-year date)))
      (cond
       ((and (string= type "article") (string= subtype "magazine"))
@@ -174,10 +133,16 @@ DEFAULT is returned if the value for FIELD does not exist."
              (cons 'pages (s-join "-"
                                   (s-split "--"
                                            (org-ok-ref-bibtex--get "pages" entry))))))
+      ((string= type "online")
+       (list (cons 'organization (org-ok-ref-bibtex--get "organization" entry))
+             (cons 'month (decoded-time-month date))
+             (cons 'day (decoded-time-day date))
+             (cons 'url (org-ok-ref-bibtex--get "url" entry))
+             (cons 'urldate (org-ok-ref-bibtex--get "urldate" entry))))
       (t
        (list (cons 'subtype subtype)
-             (cons 'editors (org-ok-ref-name--etal (-map #'car editors)))
-             (cons 'editors-full (org-ok-ref-name--etal
+             (cons 'editors (org-ok-ref-bibtex--name-etal (-map #'car editors)))
+             (cons 'editors-full (org-ok-ref-bibtex--name-etal
                                   (--map (org-ok-ref-bibtex--name-full it lang)
                                          editors)))
              (cons 'location (org-ok-ref-bibtex--get "location" entry ""))
@@ -191,27 +156,25 @@ ENTRY is created by `org-ok-ref-bibtex-entry'."
 (defun org-ok-ref-format-string--chicago-in-text (key entry)
   "Render the BibTeX entry with KEY in a in-text Chicago style.
 ENTRY is created by `org-ok-ref-bibtex-entry'."
-  (let ((ok-mule-s
-         '(("${authors-full}, “[[${citekey}][${title}]]” (/${journaltitle}/, ${date}, ${pages})"
-            . ((ja . "${authors-full}「[[${citekey}][${title}]]」（/${journaltitle}/、${date}、${pages}）")))
-           ("${authors-full}, /[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"
-            . ((ja . "${authors-full}『[[${citekey}][${title}]]』（${publisher}、${year}）")))
-           ("${editors-full} (ed.), /[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"
-            . ((ja . "${editors-full}編『[[${citekey}][${title}]]』（${publisher}、${year}）"))))))
-    (ok-mule-s
-     (cond
-      ((and (string= (alist-get 'type entry) "article")
-            (string= (alist-get 'subtype entry) "magazine"))
-       (concat
-        "${authors-full}, "
-        "“[[${citekey}][${title}]]” (/${journaltitle}/, ${date}, ${pages})"))
-      (t
-       (concat
-        (if (and (s-blank? (alist-get 'authors-full entry))
-                 (alist-get 'editors-full entry))
-            "${editors-full} (ed.), "
-          "${authors-full}, ")
-        "/[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"))))))
+  (apply
+   #'mulex-s
+   (cond
+    ((and (string= (alist-get 'type entry) "article")
+          (string= (alist-get 'subtype entry) "magazine"))
+     '("${authors-full}, “[[${citekey}][${title}]]” (/${journaltitle}/, ${date}, ${pages})"
+       ((ja . "${authors-full}「[[${citekey}][${title}]]」（/${journaltitle}/、${date}、${pages}）"))))
+    ((string= (alist-get 'type entry) "online")
+     '("${authors-full} (${year}), “[[${citekey}][${title}]]” (${organization}, Last Accessed ${date-accessed}, [[${url}]])"
+
+       ((ja . "${authors-full}（${year}）「[[${citekey}][${title}]]」（${organization}、${date-accessed}アクセス、[[${url}]]）"))
+       ))
+    (t
+     (if (and (s-blank? (alist-get 'authors-full entry))
+              (alist-get 'editors-full entry))
+         '("${editors-full} (ed.), /[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"
+           ((ja . "${editors-full}編『[[${citekey}][${title}]]』（${publisher}、${year}）")))
+       '("${authors-full}, /[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"
+         ((ja . "${authors-full}『[[${citekey}][${title}]]』（${publisher}、${year}）"))))))))
 
 (defvar org-ok-ref-format-string
   '((article
@@ -224,12 +187,34 @@ ENTRY is created by `org-ok-ref-bibtex-entry'."
         (author-year . "[[${citekey}][${authors} ${year}]]")
         (author-year-paren . "[[${citekey}][${authors} (${year})]]")
         (full-inline . org-ok-ref-format-string--chicago-in-text)))
+    (online                   ; i.e., blog article
+     . ((apa . org-ok-ref-format-string--apa)
+        (author-year . "[[${citekey}][${authors} ${year}]]")
+        (author-year-paren . "[[${citekey}][${authors} (${year})]]")
+        (full-inline . org-ok-ref-format-string--chicago-in-text)))
     (_
      . ((apa . org-ok-ref-format-string--apa)
         (author-year . "[[${citekey}][${authors} ${year}]]")
         (author-year-paren . "[[${citekey}][${authors} (${year})]]")
         (full-inline . org-ok-ref-format-string--chicago-in-text))))
   "String formats for BibTeX entry types.")
+
+(defun org-ok-ref-s-format-replacer (field entry)
+  "Format FIELD in ENTRY with `s-format'."
+  (pcase field
+    ("date"
+     (let ((dt (alist-get 'date entry)))
+       (mulex-date-format (decoded-time-year dt)
+                          (decoded-time-month dt)
+                          (decoded-time-day dt)
+                          (mulex-im-lang))))
+    ("date-accessed"
+     (let ((dt (alist-get 'urldate entry)))
+       (mulex-date-format (decoded-time-year dt)
+                          (decoded-time-month dt)
+                          (decoded-time-day dt)
+                          (mulex-im-lang))))
+    (_ (alist-get (intern field) entry))))
 
 (defun org-ok-ref-link-insert (&optional _arg)
   "Insert or update a cite link with a reference description.
@@ -289,14 +274,7 @@ The default style is 'Authors _Title_ (Publisher, Year)'."
 
     (insert
      (s-format (if (stringp fstring) fstring (funcall fstring key entry))
-               (lambda (field entry)
-                 (pcase field
-                   ("date"
-                    (org-ok-ref-bibtex--date (alist-get 'year entry)
-                                             (alist-get 'month entry)
-                                             (alist-get 'day entry)
-                                             (alist-get 'lang entry)))
-                   (_ (alist-get (intern field) entry))))
+               #'org-ok-ref-s-format-replacer
                entry))))
 
 ;;; Obsolete Utility Functions

@@ -4,9 +4,9 @@
 ;;
 ;; Author: Taro Sato <okomestudio@gmail.com>
 ;; URL: https://github.com/okomestudio/org-ok
-;; Version: 0.6.4
+;; Version: 0.7.1
 ;; Keywords: org-mode, plug-in, convenience
-;; Package-Requires: ((emacs "30.1") (dash "2.20") (ok "0.12.2") (org "9.7") (org-ref "3.1") (s "1.13.1"))
+;; Package-Requires: ((emacs "30.1") (dash "2.20") (mulex "0.1.2") (ok "0.12.2") (org "9.7") (org-ref "3.1") (s "1.13.1"))
 ;;
 ;;; License:
 ;;
