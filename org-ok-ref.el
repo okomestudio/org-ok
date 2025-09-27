@@ -56,10 +56,10 @@ See `bibtex-completion-shorten-authors' for reference."
   (cond ((= (length names) 1)
          (nth 0 names))
         ((= (length names) 2)
-         (format (mulex-s "%s & %s" ((ja . "%s＆%s")))
+         (format (mulex-s "%s & %s" '((ja . "%s＆%s")))
                  (nth 0 names) (nth 1 names)))
         ((>= (length names) 3)
-         (format (mulex-s "%s et al." ((ja . "%s他")))
+         (format (mulex-s "%s et al." '((ja . "%s他")))
                  (nth 0 names)))))
 
 (defun org-ok-ref-bibtex--prep-date (s-date)
