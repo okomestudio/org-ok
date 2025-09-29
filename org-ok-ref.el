@@ -133,6 +133,15 @@ DEFAULT is returned if the value for FIELD does not exist."
              (cons 'pages (s-join "-"
                                   (s-split "--"
                                            (org-ok-ref-bibtex--get "pages" entry))))))
+      ((or (string= type "book") (string= type "mvbook"))
+       (list (cons 'editors (org-ok-ref-bibtex--name-etal (-map #'car editors)))
+             (cons 'editors-full (org-ok-ref-bibtex--name-etal
+                                  (--map (org-ok-ref-bibtex--name-full it lang)
+                                         editors)))
+             (cons 'volume (org-ok-ref-bibtex--get "volume" entry))
+             (cons 'volumes (org-ok-ref-bibtex--get "volumes" entry))
+             (cons 'location (org-ok-ref-bibtex--get "location" entry ""))
+             (cons 'publisher (org-ok-ref-bibtex--get "publisher" entry ""))))
       ((string= type "online")
        (list (cons 'organization (org-ok-ref-bibtex--get "organization" entry))
              (cons 'month (decoded-time-month date))
@@ -156,25 +165,50 @@ ENTRY is created by `org-ok-ref-bibtex-entry'."
 (defun org-ok-ref-format-string--chicago-in-text (key entry)
   "Render the BibTeX entry with KEY in a in-text Chicago style.
 ENTRY is created by `org-ok-ref-bibtex-entry'."
-  (apply
-   #'mulex-s
-   (cond
-    ((and (string= (alist-get 'type entry) "article")
-          (string= (alist-get 'subtype entry) "magazine"))
-     '("${authors-full}, “[[${citekey}][${title}]]” (/${journaltitle}/, ${date}, ${pages})"
-       ((ja . "${authors-full}「[[${citekey}][${title}]]」（/${journaltitle}/、${date}、${pages}）"))))
-    ((string= (alist-get 'type entry) "online")
-     '("${authors-full} (${year}), “[[${citekey}][${title}]]” (${organization}, Last Accessed ${date-accessed}, [[${url}]])"
+  (cond
+   ((and (string= (alist-get 'type entry) "article")
+         (string= (alist-get 'subtype entry) "magazine"))
+    (mulex-s
+     "${authors-full}, “[[${citekey}][${title}]]” (/${journaltitle}/, ${date}, ${pages})"
+     '((ja . "${authors-full}「[[${citekey}][${title}]]」（/${journaltitle}/、${date}、${pages}）"))))
+   ((or (string= (alist-get 'type entry) "book")
+        (string= (alist-get 'type entry) "mvbook"))
+    (let* ((comma (mulex-s "," '((ja . "、"))))
+           (paren-l (mulex-s "(" '((ja . "（"))))
+           (paren-r (mulex-s ")" '((ja . "）"))))
+           (space (mulex-s " " '((ja . ""))))
+           (authors-or-editors
+            (apply #'mulex-s
+                   (if (and (s-blank? (alist-get 'authors-full entry))
+                            (alist-get 'editors-full entry))
+                       '("${editors-full} (ed.)" ((ja . "${editors-full}編")))
+                     '("${authors-full}" ((ja . "${authors-full}"))))))
+           (title (mulex-s "/[[${citekey}][${title}]]/"
+                           '((ja . "『[[${citekey}][${title}]]』"))))
+           (volume (if (alist-get 'volume entry)
+                       (mulex-s (concat comma space "vol. ${volume}" space)
+                                '((ja . "第${volume}巻")))
+                     ""))
+           (location (mulex-s "${location}: " '((ja . ""))))
+           (publisher "${publisher}")
+           (year "${year}"))
+      (concat authors-or-editors (mulex-s comma '((ja . ""))) space
+              title volume
+              paren-l location publisher comma space year paren-r)))
+   ((string= (alist-get 'type entry) "online")
+    (mulex-s
+     "${authors-full} (${year}), “[[${citekey}][${title}]]” (${organization}, Last Accessed ${date-accessed}, [[${url}]])"
 
-       ((ja . "${authors-full}（${year}）「[[${citekey}][${title}]]」（${organization}、${date-accessed}アクセス、[[${url}]]）"))
-       ))
-    (t
-     (if (and (s-blank? (alist-get 'authors-full entry))
-              (alist-get 'editors-full entry))
-         '("${editors-full} (ed.), /[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"
-           ((ja . "${editors-full}編『[[${citekey}][${title}]]』（${publisher}、${year}）")))
-       '("${authors-full}, /[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"
-         ((ja . "${authors-full}『[[${citekey}][${title}]]』（${publisher}、${year}）"))))))))
+     '((ja . "${authors-full}（${year}）「[[${citekey}][${title}]]」（${organization}、${date-accessed}アクセス、[[${url}]]）"))))
+   (t
+    (if (and (s-blank? (alist-get 'authors-full entry))
+             (alist-get 'editors-full entry))
+        (mulex-s
+         "${editors-full} (ed.), /[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"
+         '((ja . "${editors-full}編『[[${citekey}][${title}]]』（${publisher}、${year}）")))
+      (mulex-s
+       "${authors-full}, /[[${citekey}][${title}]]/ (${location}: ${publisher}, ${year})"
+       '((ja . "${authors-full}『[[${citekey}][${title}]]』（${publisher}、${year}）")))))))
 
 (defvar org-ok-ref-format-string
   '((article
