@@ -133,6 +133,13 @@ DEFAULT is returned if the value for FIELD does not exist."
              (cons 'pages (s-join "-"
                                   (s-split "--"
                                            (org-ok-ref-bibtex--get "pages" entry))))))
+      ((string= type "article")
+       (list (cons 'journaltitle (org-ok-ref-bibtex--get "journaltitle" entry))
+             (cons 'volume (org-ok-ref-bibtex--get "volume" entry))
+             (cons 'number (org-ok-ref-bibtex--get "number" entry))
+             (cons 'pages (s-join "-"
+                                  (s-split "--"
+                                           (org-ok-ref-bibtex--get "pages" entry))))))
       ((or (string= type "book") (string= type "mvbook"))
        (list (cons 'editors (org-ok-ref-bibtex--name-etal (-map #'car editors)))
              (cons 'editors-full (org-ok-ref-bibtex--name-etal
@@ -171,6 +178,10 @@ ENTRY is created by `org-ok-ref-bibtex-entry'."
     (mulex-s
      "${authors-full}, “[[${citekey}][${title}]]” (/${journaltitle}/, ${date}, ${pages})"
      '((ja . "${authors-full}「[[${citekey}][${title}]]」（/${journaltitle}/、${date}、${pages}）"))))
+   ((string= (alist-get 'type entry) "article")
+    (mulex-s
+     "${authors-full}, “[[${citekey}][${title}]],” /${journaltitle}/ ${volume}, no. ${number} (${year}): ${pages}"
+     '((ja . "${authors-full}「[[${citekey}][${title}]]」『${journaltitle}』${volume}、 no. ${number} （${year}）： ${pages}"))))
    ((or (string= (alist-get 'type entry) "book")
         (string= (alist-get 'type entry) "mvbook"))
     (let* ((comma (mulex-s "," '((ja . "、"))))
