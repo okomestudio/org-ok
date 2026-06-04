@@ -1,10 +1,10 @@
 ;;; org-ok.el --- Org Plugin  -*- lexical-binding: t -*-
 ;;
-;; Copyright (C) 2024-2025 Taro Sato
+;; Copyright (C) 2024-2026 Taro Sato
 ;;
 ;; Author: Taro Sato <okomestudio@gmail.com>
 ;; URL: https://github.com/okomestudio/org-ok
-;; Version: 0.7.4
+;; Version: 0.8.1
 ;; Keywords: org-mode, plug-in, convenience
 ;; Package-Requires: ((emacs "30.1") (dash "2.20") (mulex "0.1.2") (ok "0.12.2") (org "9.7") (org-ref "3.1") (s "1.13.1"))
 ;;
@@ -31,6 +31,7 @@
 ;;; Code:
 
 (require 'org-ok-babel)
+(require 'org-ok-link)
 (require 'org-ok-org)
 (require 'org-ok-ref)
 (require 'org-ok-src)
